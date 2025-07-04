@@ -31,7 +31,90 @@ Examples:
 ```
 
 
-3. Graph from array of node objects (adjacency list)
+3. [Graph from array of node objects](https://appsa-uk.github.io/d3-dag/dag-adjacency-lists-d3.html) (adjacency list). ```parseAdjacencyList``` function is used to convert adjacency lists array object to graph object using graphlib library.
+
+```javascript
+      function parseAdjacencyList(jsonAdjacencyList) {
+         const rawData = JSON.parse(jsonAdjacencyList);
+         const g = new graphlib.Graph({ directed: true });
+      
+         g.setGraph({})
+      
+         // Add Nodes
+         rawData.forEach(nodeObj => {
+            if (!nodeObj.id) {
+               console.warn("Node object missing 'id' property:", nodeObj);
+               return;
+            }
+      
+            const nodeId = nodeObj.id.toString();
+      
+            // Prepare node properties for graphlib
+            // Exclude 'linksTo' and 'id' from direct node properties
+            const nodeProps = { ...nodeObj };
+            delete nodeProps.id;
+            delete nodeProps.linksTo;
+      
+            // Map specific properties for Dagre-D3 rendering
+            // You can add more mappings here as needed
+            if (nodeProps.label === undefined) {
+               nodeProps.label = nodeId;
+            }
+            if (nodeProps.color) {
+               nodeProps.style = `fill: ${nodeProps.color};`;
+               delete nodeProps.color;
+            }
+            // For example you can add custom settings
+            if (nodeProps.shape) {
+                nodeProps.shape = nodeProps.shape;
+            }
+      
+            g.setNode(nodeId, nodeProps);
+         });
+         
+         // --- Second Pass: Add Edges ---
+         // Now iterate again to add edges, assuming all nodes are already in the graph.
+         rawData.forEach(nodeObj => {
+         const sourceId = nodeObj.id.toString();
+         
+            if (Array.isArray(nodeObj.linksTo)) {
+               nodeObj.linksTo.forEach(link => {
+                if (!link.target) {
+                    console.warn(`Link from ${sourceId} missing 'target' property:`, link);
+                    return;
+                }
+         
+                const targetId = link.target.toString();
+         
+                if (!g.hasNode(targetId)) {
+                    console.warn(`Target node '${targetId}' for edge from '${sourceId}' does not exist. Skipping edge.`, link);
+                    return;
+                }
+         
+                // Prepare edge properties for graphlib
+                const edgeProps = { ...link }; 
+                delete edgeProps.target; // 'target' is used to define the edge, not its property
+         
+                // Map specific properties for Dagre-D3 rendering
+                if (edgeProps.label === undefined) {
+                    edgeProps.label = '';
+                }
+                // If you want a custom style based on a 'color' in the link:
+                // if (edgeProps.color) {
+                //     edgeProps.style = `stroke: ${edgeProps.color};`;
+                //     delete edgeProps.color;
+                // }
+         
+                g.setEdge(sourceId, targetId, edgeProps);
+            });
+          }
+        });
+        return g;
+      }
+
+```
+
+
 
 Bugs:
 - arrowheads are not renedered on Safari (most likely because of ```<foreignObject>```)
