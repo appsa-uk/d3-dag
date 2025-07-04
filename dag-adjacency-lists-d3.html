@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adjacency Lists to D3 DAG</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/graphlib/3.0.1/graphlib.min.js"></script>
+    <script src='https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.js'></script>
+    <style>
+      svg {
+      border: 1px solid #999;
+      overflow: hidden;
+      }
+      .node {
+      white-space: nowrap;
+      }
+      .node rect,
+      .node circle,
+      .node ellipse {
+      stroke: #333;
+      fill: #fff;
+      stroke-width: 1.5px;
+      }
+      .cluster rect {
+      stroke: #333;
+      fill: #000;
+      fill-opacity: 0.1;
+      stroke-width: 1.5px;
+      }
+      .edgePath path.path {
+      stroke: #333;
+      stroke-width: 1.5px;
+      fill: none;
+      }
+      h1, h2 {
+      color: #333;
+      }
+      textarea {
+      width: 800px;
+      }
+      label {
+      margin-top: 1em;
+      display: block;
+      }
+      .error {
+      color: red;
+      }
+    </style>
+  </head>
+  <body onLoad="tryDraw();">
+
+    <h1>Adjacency Lists to D3 DAG</h1>
+    <p>An array of node objects (adjacency lists) is transformed into d3 graph</p>
+    <h2>Input</h2>
+
+    <form>
+      <label for="inputGraph">JSON Adjacency Lists Definition</label>
+      <textarea id="inputGraph" rows="5" style="display: block" onKeyUp="tryDraw();">
+      </textarea>
+    </form>
+
+    <h2>Graph Visualization</h2>
+    <svg width=800 height=600>
+      <g/>
+    </svg>
+
+    <script>
+      const inputGraph = document.querySelector("#inputGraph");
+      inputGraph.value = JSON.stringify([
+        {
+          "id": "A",
+          "label": "Start Process",
+          "color": "red",
+          "description": "Initial step in the workflow.",
+          "linksTo": [
+            { "target": "B", "label": "Path 1", "weight": 10 },
+            { "target": "D", "label": "Alternative Path", "style": "stroke: green; stroke-width: 2px;" }
+          ]
+        },
+        {
+          "id": "B",
+          "label": "Intermediate Stage",
+          "color": "blue",
+          "linksTo": [
+            { "target": "C", "label": "Next Step" },
+            { "target": "E", "label": "Side Route" }
+          ]
+        },
+        {
+          "id": "C",
+          "label": "Final Output",
+          "color": "green",
+          "linksTo": [
+            { "target": "E", "label": "Consolidate" }
+          ]
+        },
+        {
+          "id": "D",
+          "label": "Decision Point",
+          "color": "orange",
+          "linksTo": [
+            { "target": "E", "label": "Merge" }
+          ]
+        },
+        {
+          "id": "E",
+          "label": "End Point",
+          "color": "purple",
+          "linksTo": []
+        }
+      ],
+      null,
+      2)
+      
+      
+      let oldInputGraphValue;
+      
+      // Set up zoom support
+      const svg = d3.select("svg"),
+          inner = d3.select("svg g"),
+          zoom = d3.zoom().on("zoom", function(event) { 
+            inner.attr("transform", event.transform);  
+          });
+      svg.call(zoom);
+      
+      // Create and configure the renderer
+      const render = dagreD3.render();
+      
+      let g;
+      
+      function parseAdjacencyList(jsonAdjacencyList) {
+         const rawData = JSON.parse(jsonAdjacencyList);
+         const g = new graphlib.Graph({ directed: true });
+      
+         g.setGraph({})
+      
+         // Add Nodes
+         rawData.forEach(nodeObj => {
+            if (!nodeObj.id) {
+               console.warn("Node object missing 'id' property:", nodeObj);
+               return;
+            }
+      
+            const nodeId = nodeObj.id.toString();
+      
+            // Prepare node properties for graphlib
+            // Exclude 'linksTo' and 'id' from direct node properties
+            const nodeProps = { ...nodeObj };
+            delete nodeProps.id;
+            delete nodeProps.linksTo;
+      
+            // Map specific properties for Dagre-D3 rendering
+            // You can add more mappings here as needed
+            if (nodeProps.label === undefined) {
+               nodeProps.label = nodeId;
+            }
+            if (nodeProps.color) {
+               nodeProps.style = `fill: ${nodeProps.color};`;
+               delete nodeProps.color;
+            }
+            // For example you can add custom settings
+            if (nodeProps.shape) {
+                nodeProps.shape = nodeProps.shape;
+            }
+      
+            g.setNode(nodeId, nodeProps);
+         });
+         
+         // --- Second Pass: Add Edges ---
+         // Now iterate again to add edges, assuming all nodes are already in the graph.
+         rawData.forEach(nodeObj => {
+         const sourceId = nodeObj.id.toString();
+         
+            if (Array.isArray(nodeObj.linksTo)) {
+               nodeObj.linksTo.forEach(link => {
+                if (!link.target) {
+                    console.warn(`Link from ${sourceId} missing 'target' property:`, link);
+                    return;
+                }
+         
+                const targetId = link.target.toString();
+         
+                if (!g.hasNode(targetId)) {
+                    console.warn(`Target node '${targetId}' for edge from '${sourceId}' does not exist. Skipping edge.`, link);
+                    return;
+                }
+         
+                // Prepare edge properties for graphlib
+                const edgeProps = { ...link }; 
+                delete edgeProps.target; // 'target' is used to define the edge, not its property
+         
+                // Map specific properties for Dagre-D3 rendering
+                if (edgeProps.label === undefined) {
+                    edgeProps.label = '';
+                }
+                // If you want a custom style based on a 'color' in the link:
+                // if (edgeProps.color) {
+                //     edgeProps.style = `stroke: ${edgeProps.color};`;
+                //     delete edgeProps.color;
+                // }
+         
+                g.setEdge(sourceId, targetId, edgeProps);
+            });
+          }
+        });
+        return g;
+      }
+      
+      function tryDraw() {
+        if (oldInputGraphValue !== inputGraph.value) {
+          inputGraph.setAttribute("class", "");
+          oldInputGraphValue = inputGraph.value;
+          try {
+            g = parseAdjacencyList(inputGraph.value);
+          } catch (e) {
+            inputGraph.setAttribute("class", "error");
+            throw e;
+          }
+      
+          // Set margins, if not present
+          if (!g.graph().hasOwnProperty("marginx") &&
+              !g.graph().hasOwnProperty("marginy")) {
+            g.graph().marginx = 20;
+            g.graph().marginy = 20;
+          }
+      
+          g.graph().transition = function(selection) {
+            return selection.transition().duration(500);
+          };
+      
+          // Render the graph into svg g
+          d3.select("svg g").call(render, g);
+        }
+      }
+          
+    </script>
+  </body>
+</html>
