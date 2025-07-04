@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>GraphViz DOT to D3 DAG</title>
+      <script src="https://d3js.org/d3.v7.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/graphlib/3.0.1/graphlib.min.js"></script>
+      <script src='https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.js'></script>
+      <style>
+         svg {
+         border: 1px solid #999;
+         overflow: hidden;
+         }
+         .node {
+         white-space: nowrap;
+         }
+         .node rect,
+         .node circle,
+         .node ellipse {
+         stroke: #333;
+         fill: #fff;
+         stroke-width: 1.5px;
+         }
+         .cluster rect {
+         stroke: #333;
+         fill: #000;
+         fill-opacity: 0.1;
+         stroke-width: 1.5px;
+         }
+         .edgePath path.path {
+         stroke: #333;
+         stroke-width: 1.5px;
+         fill: none;
+         }
+         h1, h2 {
+         color: #333;
+         }
+         textarea {
+         width: 800px;
+         }
+         label {
+         margin-top: 1em;
+         display: block;
+         }
+         .error {
+         color: red;
+         }
+      </style>
+   </head>
+   <body onLoad="tryDraw();">
+     
+      <h1>GraphViz DOT to D3 DAG</h1>
+      <p>Syntax reference can be found <a href="https://graphs.grevian.org/example">here</a></p>
+      <h2>Input</h2>
+     
+      <form>
+         <label for="inputGraph">Graphviz Definition</label>
+         <textarea id="inputGraph" rows="5" style="display: block" onKeyUp="tryDraw();">
+         </textarea>
+      </form>
+     
+      <h2>Graph Visualization</h2>
+      <svg width=800 height=600>
+         <g/>
+      </svg>
+
+     
+      <script>
+         const inputGraph = document.querySelector("#inputGraph");
+         inputGraph.value = JSON.stringify({
+           "nodes": [
+             {"id": "A", "label": "Node A"},
+             {"id": "B", "label": "Node B"},
+             {"id": "C", "label": "Node C"}
+           ],
+           "edges": [
+             {"source": "A", "target": "B", "label": "Edge AB"},
+             {"source": "B", "target": "C"}
+           ],
+           "graphAttributes": {
+             "rankdir": "LR",
+             "marginx": 30,
+             "marginy": 30
+           }
+         },
+         null,
+         2)
+
+ 
+         let oldInputGraphValue;
+         
+         // Set up zoom support
+         const svg = d3.select("svg"),
+             inner = d3.select("svg g"),
+             zoom = d3.zoom().on("zoom", function(event) { 
+               inner.attr("transform", event.transform);  
+             });
+         svg.call(zoom);
+         
+         // Create and configure the renderer
+         const render = dagreD3.render();
+         
+         let g;
+
+         function parseCustomJson(jsonString) {
+            const data = JSON.parse(jsonString);
+            const g = new graphlib.Graph({ directed: true });
+
+            // Set graph attributes (if any)
+            if (data.graphAttributes) {
+            g.setGraph(data.graphAttributes);
+            }
+
+            // Add nodes
+            data.nodes.forEach(node => {
+            g.setNode(node.id, { label: node.label, ...node.attributes });
+            });
+
+            // Add edges
+            data.edges.forEach(edge => {
+            g.setEdge(edge.source, edge.target, { label: edge.label, ...edge.attributes }); // Edge attributes can be custom
+            });
+
+            return g;
+         }
+
+         function tryDraw() {
+           if (oldInputGraphValue !== inputGraph.value) {
+             inputGraph.setAttribute("class", "");
+             oldInputGraphValue = inputGraph.value;
+             try {
+               g = parseCustomJson(inputGraph.value);
+             } catch (e) {
+               inputGraph.setAttribute("class", "error");
+               throw e;
+             }
+         
+             // Set margins, if not present
+             if (!g.graph().hasOwnProperty("marginx") &&
+                 !g.graph().hasOwnProperty("marginy")) {
+               g.graph().marginx = 20;
+               g.graph().marginy = 20;
+             }
+         
+             g.graph().transition = function(selection) {
+               return selection.transition().duration(500);
+             };
+         
+             // Render the graph into svg g
+             d3.select("svg g").call(render, g);
+           }
+         }
+             
+      </script>
+   </body>
+</html>
