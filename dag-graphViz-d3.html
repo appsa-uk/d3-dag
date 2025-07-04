@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>GraphViz DOT to D3 DAG</title>
+      <script src="https://d3js.org/d3.v7.min.js"></script>
+      <script src="https://dagrejs.github.io/project/graphlib-dot/v0.6.3/graphlib-dot.js"></script>
+      <script src='https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.js'></script>
+      <style>
+         svg {
+         border: 1px solid #999;
+         overflow: hidden;
+         }
+         .node {
+         white-space: nowrap;
+         }
+         .node rect,
+         .node circle,
+         .node ellipse {
+         stroke: #333;
+         fill: #fff;
+         stroke-width: 1.5px;
+         }
+         .cluster rect {
+         stroke: #333;
+         fill: #000;
+         fill-opacity: 0.1;
+         stroke-width: 1.5px;
+         }
+         .edgePath path.path {
+         stroke: #333;
+         stroke-width: 1.5px;
+         fill: none;
+         }
+         h1, h2 {
+         color: #333;
+         }
+         textarea {
+         width: 800px;
+         }
+         label {
+         margin-top: 1em;
+         display: block;
+         }
+         .error {
+         color: red;
+         }
+      </style>
+   </head>
+   <body onLoad="tryDraw();">
+     
+      <h1>GraphViz DOT to D3 DAG</h1>
+      <p>Syntax reference can be found <a href="https://graphs.grevian.org/example">here</a></p>
+      <h2>Input</h2>
+     
+      <form>
+         <label for="inputGraph">Graphviz Definition</label>
+         <textarea id="inputGraph" rows="5" style="display: block" onKeyUp="tryDraw();">
+         </textarea>
+      </form>
+     
+      <h2>Graph Visualization</h2>
+      <svg width=800 height=600>
+         <g/>
+      </svg>
+
+     
+      <script>
+         const inputGraph = document.querySelector("#inputGraph");
+         inputGraph.value = `
+digraph {
+   node [rx=5 ry=5 labelStyle="font: 300 14px 'Helvetica Neue', Helvetica"]
+   edge [labelStyle="font: 300 14px 'Helvetica Neue', Helvetica"]
+   A [labelType="html"
+       label="A <span style='font-size:32px'>Big</span> <span style='color:red;'>HTML</span> Source!"];
+   C;
+   E [label="Bold Red Sink" style="fill: #f77; font-weight: bold"];
+   A -> B -> C;
+   B -> D [label="A blue label" labelStyle="fill: #55f; font-weight: bold;"];
+   D -> E [label="A thick red edge" style="stroke: #f77; stroke-width: 2px;" arrowheadStyle="fill: #f77"];
+   C -> E;
+   A -> D [labelType="html" label="A multi-rank <span style='color:blue;'>HTML</span> edge!"];
+}
+`
+ 
+         let oldInputGraphValue;
+         
+         // Set up zoom support
+         const svg = d3.select("svg"),
+             inner = d3.select("svg g"),
+             zoom = d3.zoom().on("zoom", function(event) { 
+               inner.attr("transform", event.transform);  
+             });
+         svg.call(zoom);
+         
+         // Create and configure the renderer
+         const render = dagreD3.render();
+         
+         let g;
+         function tryDraw() {
+           if (oldInputGraphValue !== inputGraph.value) {
+             inputGraph.setAttribute("class", "");
+             oldInputGraphValue = inputGraph.value;
+             try {
+               g = graphlibDot.read(inputGraph.value);
+             } catch (e) {
+               inputGraph.setAttribute("class", "error");
+               throw e;
+             }
+         
+             // Set margins, if not present
+             if (!g.graph().hasOwnProperty("marginx") &&
+                 !g.graph().hasOwnProperty("marginy")) {
+               g.graph().marginx = 20;
+               g.graph().marginy = 20;
+             }
+         
+             g.graph().transition = function(selection) {
+               return selection.transition().duration(500);
+             };
+         
+             // Render the graph into svg g
+             d3.select("svg g").call(render, g);
+           }
+         }
+             
+      </script>
+   </body>
+</html>
